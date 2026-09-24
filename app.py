@@ -1,10 +1,8 @@
 import os
+import requests
 from flask import Flask, request, jsonify
-from openai import OpenAI
 
 app = Flask(__name__)
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 SYSTEM_PROMPT = """
 Ты технический помощник Дениса.
@@ -21,7 +19,7 @@ SYSTEM_PROMPT = """
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Alice GPT webhook is running"
+    return "Alice OpenRouter webhook is running"
 
 @app.route("/", methods=["POST"])
 def alice_webhook():
@@ -46,20 +44,39 @@ def alice_webhook():
         answer = "Я тебя не расслышал. Повтори вопрос."
     else:
         try:
-            response = client.responses.create(
-                model="gpt-5",
-                instructions=SYSTEM_PROMPT,
-                input=user_text,
-                max_output_tokens=220
+            r = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": "Bearer " + os.environ["OPENROUTER_API_KEY"],
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "openrouter/free",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": SYSTEM_PROMPT
+                        },
+                        {
+                            "role": "user",
+                            "content": user_text
+                        }
+                    ],
+                    "max_tokens": 120
+                },
+                timeout=3.8
             )
 
-            answer = response.output_text.strip()
+            r.raise_for_status()
+
+            result = r.json()
+            answer = result["choices"][0]["message"]["content"].strip()
 
             if len(answer) > 950:
                 answer = answer[:947] + "..."
 
         except Exception as e:
-            print("OpenAI error:", str(e))
+            print("OpenRouter error:", str(e))
             answer = "Не удалось получить ответ. Попробуй ещё раз."
 
     return jsonify({
